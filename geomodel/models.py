@@ -21,15 +21,18 @@ class geoModel(nn.Module):
 
         embeddings = self.embeddingLayer(inputs).view((input_size,-1))
         output = F.relu(self.linear1(embeddings))
-        log_probs = F.log_softmax(self.linear2(output),dim=1)
-
+        log_probs = F.log_softmax(self.linear2(output),dim=-1)
+        print("Log probs shape: {}".format(log_probs.shape))
         return log_probs
 
 
     def predict(self, inputs):
 
+        if inputs.dim() == 1:
+            inputs = inputs.reshape(1,-1)
+
         with torch.no_grad():
-            
-            return self.forward(inputs)
+            preds = self.forward(inputs)
+            return preds
 
 
