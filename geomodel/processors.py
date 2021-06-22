@@ -1,48 +1,71 @@
-def words_to_index_generator(word_dict, sentences):
+import math
+import os
+import numpy as np
+import pandas as pd
+from . import haversine as h
 
-    i = 1 + len(word_dict.keys())
+def generate_label_features(point_sequence,window=2):
+    
+    labels = [] 
+    features = []
+    
+    for i in range(window,len(point_sequence)):
+        
+        y = point_sequence[i]
+        X = point_sequence[i-window:i]
+        
+        labels.append(y)
+        features.append(X)
 
-    for sentence in sentences:
-        for word in sentence.split(' '):
-            if word not in word_dict.keys():
-                word_dict[word] = i
-                i += 1
+    return np.array(labels), np.array(features)
 
-    return word_dict
 
-def cbow_context_target_generator(word_dict, sentences, window, verbose=False):
+def process_files_list(files,column_names,close_lats,close_lons,_POINT_RADIUS=50/3,_MINIMUM_DISTANCE=40000):
 
-    targets = []
-    contexts = []
+    runs_dictionary = {}
+    
+    for f in files:
 
-    for sentence in sentences:
+        run = {}
+        file_name = os.path.basename(f)
 
-        sentence = sentence.split(' ')
-        sentence_length = len(sentence)
-        if sentence_length >= 2*window + 1:
+        run["file_name"] = file_name
+        run["data"] = pd.read_csv("{}".format(f),names=column_names)
+        run["data"] = run["data"][run["data"]["latitude"].notnull() == True]
+        run["latitude"] = run["data"]["latitude"].to_numpy() * 180 / math.pow(2,31)
+        run["longitude"] = run["data"]["longitude"].to_numpy() * 180 / math.pow(2,31)
+        lat = run["latitude"]
+        lon = run["longitude"]
 
-            for i in range(window,sentence_length-window):
+        if len(lat) < 1:
+            continue
+        
+        y = np.array([np.mean(lat), np.mean(lon)])
+        run["mean_location"] = y
+        hav_distances = h.haversine(y,(close_lats,close_lons))
+        close_points = np.where(hav_distances < _MINIMUM_DISTANCE)[0]
+        run["close_points"] = close_points
 
-                context = []
-                context_words = []
-                target = word_dict[sentence[i]]
+        if len(close_points) > 0:
+            
+            points_visited = []
+            
+            for y,x in np.nditer((lat,lon)):
+                j = 0
+                for l,ll in np.nditer([close_lats[close_points], close_lons[close_points]]):
+                    distance = h.haversine_single_coordinates((y,x),(l,ll))
+                    
+                    if distance < _POINT_RADIUS: points_visited.append(close_points[j])
+                    
+                    j += 1
+            
+            if len(points_visited) > 0: run["points_visited"] = np.array(points_visited)
+        
+        if "points_visited" in run.keys():
+            pv = run["points_visited"]
+            run["point_sequence"] = pv[np.where(np.insert(np.diff(pv),0,1) != 0)]
 
-                for j in range(i - window, i):
+        if "point_sequence" in run.keys():
+            runs_dictionary[file_name] = run
 
-                    context_words.append(sentence[j])
-                    context.append(word_dict[sentence[j]])
-                
-                for j in range(i + 1, i + 1 + window):
-
-                    context_words.append(sentence[j])
-                    context.append(word_dict[sentence[j]])
-                
-                if verbose == True:
-                    s = " "
-                    s = s.join(context_words)
-                    print(f"context: {s} --> {sentence[i]} :target")
-
-                targets.append(target)
-                contexts.append(context)
-
-    return (targets,contexts)
+    return runs_dictionary

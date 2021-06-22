@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-class geoDataSet2(Dataset):
+class geoDataSet(Dataset):
 
     def __init__(self, labels_file, features_file):
         
