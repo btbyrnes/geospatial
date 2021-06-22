@@ -33,7 +33,6 @@ def epoch(model, loss_function, optimizer, train_dataloader, test_dataloader=Non
 
         optimizer.zero_grad()
         pred = model(X)
-        
         loss = loss_function(pred,y)
 
         loss.backward()
